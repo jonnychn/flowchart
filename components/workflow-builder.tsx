@@ -1,0 +1,383 @@
+"use client"
+
+import type React from "react"
+
+import { useState, useCallback, useRef } from "react"
+import ReactFlow, {
+  ReactFlowProvider,
+  Background,
+  Controls,
+  MiniMap,
+  addEdge,
+  Panel,
+  useNodesState,
+  useEdgesState,
+  type Connection,
+  type Edge,
+  type NodeTypes,
+  type EdgeTypes,
+  type Node,
+  getRectOfNodes,
+  getTransformForBounds,
+} from "reactflow"
+import "reactflow/dist/style.css"
+import { toast } from "@/components/ui/use-toast"
+import { Button } from "@/components/ui/button"
+import { Save, Upload, Play, Download } from "lucide-react"
+import NodeLibrary from "./node-library"
+import NodeConfigPanel from "./node-config-panel"
+import CustomEdge from "./custom-edge"
+import { InputNode } from "./nodes/input-node"
+import { ProcessNode } from "./nodes/process-node"
+import { CodeNode } from "./nodes/code-node"
+import { generateNodeId, createNode } from "@/lib/workflow-utils"
+import type { WorkflowNode } from "@/lib/types"
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
+import { toPng, toJpeg, toSvg } from "html-to-image"
+
+import { StartNode } from "./nodes/start-node"
+import { EndNode } from "./nodes/end-node"
+import { DecisionNode } from "./nodes/decision-node"
+import { ConnectorNode } from "./nodes/connector-node"
+import { PreparationNode } from "./nodes/preparation-node"
+import { ManualNode } from "./nodes/manual-node"
+import { DocumentNode } from "./nodes/document-node"
+import { StickyNoteNode } from "./nodes/sticky-note"
+
+const nodeTypes: NodeTypes = {
+  start: StartNode,
+  end: EndNode,
+  process: ProcessNode,
+  decision: DecisionNode,
+  input: InputNode,
+  connector: ConnectorNode,
+  preparation: PreparationNode,
+  manual: ManualNode,
+  document: DocumentNode,
+  sticky: StickyNoteNode,
+  code: CodeNode,
+}
+
+const edgeTypes: EdgeTypes = {
+  custom: CustomEdge,
+}
+
+export default function WorkflowBuilder() {
+  const reactFlowWrapper = useRef<HTMLDivElement>(null)
+  const [nodes, setNodes, onNodesChange] = useNodesState([])
+  const [edges, setEdges, onEdgesChange] = useEdgesState([])
+  const [selectedNode, setSelectedNode] = useState<Node | null>(null)
+  const [reactFlowInstance, setReactFlowInstance] = useState<any>(null)
+
+  const onConnect = useCallback(
+    (params: Edge | Connection) => setEdges((eds) => addEdge({ ...params, type: "custom" }, eds)),
+    [setEdges],
+  )
+
+  const onDragOver = useCallback((event: React.DragEvent<HTMLDivElement>) => {
+    event.preventDefault()
+    event.dataTransfer.dropEffect = "move"
+  }, [])
+
+  const onDrop = useCallback(
+    (event: React.DragEvent<HTMLDivElement>) => {
+      event.preventDefault()
+
+      const reactFlowBounds = reactFlowWrapper.current?.getBoundingClientRect()
+      const type = event.dataTransfer.getData("application/reactflow")
+
+      // Check if the dropped element is valid
+      if (typeof type === "undefined" || !type) {
+        return
+      }
+
+      if (reactFlowBounds && reactFlowInstance) {
+        const position = reactFlowInstance.screenToFlowPosition({
+          x: event.clientX - reactFlowBounds.left,
+          y: event.clientY - reactFlowBounds.top,
+        })
+
+        const newNode = createNode({
+          type,
+          position,
+          id: generateNodeId(type),
+        })
+
+        setNodes((nds) => nds.concat(newNode))
+      }
+    },
+    [reactFlowInstance, setNodes],
+  )
+
+  const onNodeClick = useCallback((_: React.MouseEvent, node: Node) => {
+    setSelectedNode(node)
+  }, [])
+
+  const onPaneClick = useCallback(() => {
+    setSelectedNode(null)
+  }, [])
+
+  const updateNodeData = useCallback(
+    (nodeId: string, data: any) => {
+      setNodes((nds) =>
+        nds.map((node) => {
+          if (node.id === nodeId) {
+            return {
+              ...node,
+              data: {
+                ...node.data,
+                ...data,
+              },
+            }
+          }
+          return node
+        }),
+      )
+    },
+    [setNodes],
+  )
+
+  const saveWorkflow = () => {
+    if (nodes.length === 0) {
+      toast({
+        title: "Nothing to save",
+        description: "Add some nodes to your workflow first",
+        variant: "destructive",
+      })
+      return
+    }
+
+    const workflow = {
+      nodes,
+      edges,
+    }
+
+    const workflowString = JSON.stringify(workflow)
+    localStorage.setItem("workflow", workflowString)
+
+    toast({
+      title: "Workflow saved",
+      description: "Your workflow has been saved successfully",
+    })
+  }
+
+  const loadWorkflow = () => {
+    const savedWorkflow = localStorage.getItem("workflow")
+
+    if (!savedWorkflow) {
+      toast({
+        title: "No saved workflow",
+        description: "There is no workflow saved in your browser",
+        variant: "destructive",
+      })
+      return
+    }
+
+    try {
+      const { nodes: savedNodes, edges: savedEdges } = JSON.parse(savedWorkflow)
+      setNodes(savedNodes)
+      setEdges(savedEdges)
+      toast({
+        title: "Workflow loaded",
+        description: "Your workflow has been loaded successfully",
+      })
+    } catch (error) {
+      toast({
+        title: "Error loading workflow",
+        description: "There was an error loading your workflow",
+        variant: "destructive",
+      })
+    }
+  }
+
+  const executeWorkflow = () => {
+    if (nodes.length === 0) {
+      toast({
+        title: "Nothing to execute",
+        description: "Add some nodes to your workflow first",
+        variant: "destructive",
+      })
+      return
+    }
+
+    toast({
+      title: "Executing workflow",
+      description: "Your workflow is being executed (simulation only in this MVP)",
+    })
+
+    // In a real implementation, we would traverse the graph and execute each node
+    // For the MVP, we'll just simulate execution with a success message
+    setTimeout(() => {
+      toast({
+        title: "Workflow executed",
+        description: "Your workflow has been executed successfully",
+      })
+    }, 2000)
+  }
+
+  const exportWorkflow = async (format: "png" | "jpg" | "svg") => {
+    if (nodes.length === 0) {
+      toast({
+        title: "Nothing to export",
+        description: "Add some nodes to your workflow first",
+        variant: "destructive",
+      })
+      return
+    }
+
+    const nodesBounds = getRectOfNodes(nodes)
+    const transform = getTransformForBounds(nodesBounds, 1024, 768, 0.5, 2)
+
+    const viewport = document.querySelector(".react-flow__viewport") as HTMLElement
+
+    if (!viewport) {
+      toast({
+        title: "Export failed",
+        description: "Could not find the workflow canvas",
+        variant: "destructive",
+      })
+      return
+    }
+
+    try {
+      let dataUrl: string
+      const fileName = `workflow.${format}`
+
+      switch (format) {
+        case "png":
+          dataUrl = await toPng(viewport, {
+            backgroundColor: "#ffffff",
+            width: 1024,
+            height: 768,
+            style: {
+              width: "1024px",
+              height: "768px",
+              transform: `translate(${transform[0]}px, ${transform[1]}px) scale(${transform[2]})`,
+            },
+          })
+          break
+        case "jpg":
+          dataUrl = await toJpeg(viewport, {
+            backgroundColor: "#ffffff",
+            width: 1024,
+            height: 768,
+            style: {
+              width: "1024px",
+              height: "768px",
+              transform: `translate(${transform[0]}px, ${transform[1]}px) scale(${transform[2]})`,
+            },
+          })
+          break
+        case "svg":
+          dataUrl = await toSvg(viewport, {
+            backgroundColor: "#ffffff",
+            width: 1024,
+            height: 768,
+            style: {
+              width: "1024px",
+              height: "768px",
+              transform: `translate(${transform[0]}px, ${transform[1]}px) scale(${transform[2]})`,
+            },
+          })
+          break
+        default:
+          throw new Error("Unsupported format")
+      }
+
+      // Create download link
+      const link = document.createElement("a")
+      link.download = fileName
+      link.href = dataUrl
+      link.click()
+
+      toast({
+        title: "Export successful",
+        description: `Workflow exported as ${format.toUpperCase()}`,
+      })
+    } catch (error) {
+      console.error("Export failed:", error)
+      toast({
+        title: "Export failed",
+        description: "There was an error exporting your workflow",
+        variant: "destructive",
+      })
+    }
+  }
+
+  return (
+    <div className="flex h-screen">
+      <div className="w-64 border-r border-gray-200 p-4 bg-gray-50">
+        <h2 className="text-lg font-semibold mb-4">Node Library</h2>
+        <NodeLibrary />
+      </div>
+
+      <div className="flex-1 flex flex-col">
+        <div className="flex-1" ref={reactFlowWrapper}>
+          <ReactFlowProvider>
+            <ReactFlow
+              nodes={nodes}
+              edges={edges}
+              onNodesChange={onNodesChange}
+              onEdgesChange={onEdgesChange}
+              onConnect={onConnect}
+              onInit={setReactFlowInstance}
+              onDrop={onDrop}
+              onDragOver={onDragOver}
+              onNodeClick={onNodeClick}
+              onPaneClick={onPaneClick}
+              nodeTypes={nodeTypes}
+              edgeTypes={edgeTypes}
+              fitView
+              snapToGrid
+              snapGrid={[15, 15]}
+              defaultEdgeOptions={{ type: "custom" }}
+            >
+              <Background />
+              <Controls />
+              <MiniMap />
+              <Panel position="top-right">
+                <div className="flex gap-2">
+                  <Button onClick={saveWorkflow} size="sm" variant="outline">
+                    <Save className="h-4 w-4 mr-2" />
+                    Save
+                  </Button>
+                  <Button onClick={loadWorkflow} size="sm" variant="outline">
+                    <Upload className="h-4 w-4 mr-2" />
+                    Load
+                  </Button>
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <Button size="sm" variant="outline">
+                        <Download className="h-4 w-4 mr-2" />
+                        Export
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent>
+                      <DropdownMenuItem onClick={() => exportWorkflow("png")}>Export as PNG</DropdownMenuItem>
+                      <DropdownMenuItem onClick={() => exportWorkflow("jpg")}>Export as JPG</DropdownMenuItem>
+                      <DropdownMenuItem onClick={() => exportWorkflow("svg")}>Export as SVG</DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                  <Button onClick={executeWorkflow} size="sm" variant="default">
+                    <Play className="h-4 w-4 mr-2" />
+                    Execute
+                  </Button>
+                </div>
+              </Panel>
+            </ReactFlow>
+          </ReactFlowProvider>
+        </div>
+      </div>
+
+      {selectedNode && (
+        <div className="w-80 border-l border-gray-200 p-4 bg-gray-50">
+          <NodeConfigPanel
+            node={selectedNode as WorkflowNode}
+            updateNodeData={updateNodeData}
+            onClose={() => setSelectedNode(null)}
+          />
+        </div>
+      )}
+    </div>
+  )
+}
