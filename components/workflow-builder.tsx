@@ -3,7 +3,8 @@
 import type React from "react"
 
 import { useState, useCallback, useRef } from "react"
-import ReactFlow, {
+import {
+  ReactFlow,
   ReactFlowProvider,
   Background,
   Controls,
@@ -17,10 +18,10 @@ import ReactFlow, {
   type NodeTypes,
   type EdgeTypes,
   type Node,
-  getRectOfNodes,
-  getTransformForBounds,
-} from "reactflow"
-import "reactflow/dist/style.css"
+  getNodesBounds,
+  getViewportForBounds,
+} from "@xyflow/react"
+import "@xyflow/react/dist/style.css"
 import { toast } from "@/components/ui/use-toast"
 import { Button } from "@/components/ui/button"
 import { Save, Upload, Play, Download } from "lucide-react"
@@ -225,12 +226,12 @@ export default function WorkflowBuilder() {
       return
     }
 
-    const nodesBounds = getRectOfNodes(nodes)
-    const transform = getTransformForBounds(nodesBounds, 1024, 768, 0.5, 2)
+    const nodesBounds = getNodesBounds(nodes)
+    const viewport = getViewportForBounds(nodesBounds, 1024, 768, 0.5, 2)
 
-    const viewport = document.querySelector(".react-flow__viewport") as HTMLElement
+    const viewportElement = document.querySelector(".react-flow__viewport") as HTMLElement
 
-    if (!viewport) {
+    if (!viewportElement) {
       toast({
         title: "Export failed",
         description: "Could not find the workflow canvas",
@@ -245,38 +246,38 @@ export default function WorkflowBuilder() {
 
       switch (format) {
         case "png":
-          dataUrl = await toPng(viewport, {
+          dataUrl = await toPng(viewportElement, {
             backgroundColor: "#ffffff",
             width: 1024,
             height: 768,
             style: {
               width: "1024px",
               height: "768px",
-              transform: `translate(${transform[0]}px, ${transform[1]}px) scale(${transform[2]})`,
+              transform: `translate(${viewport.x}px, ${viewport.y}px) scale(${viewport.zoom})`,
             },
           })
           break
         case "jpg":
-          dataUrl = await toJpeg(viewport, {
+          dataUrl = await toJpeg(viewportElement, {
             backgroundColor: "#ffffff",
             width: 1024,
             height: 768,
             style: {
               width: "1024px",
               height: "768px",
-              transform: `translate(${transform[0]}px, ${transform[1]}px) scale(${transform[2]})`,
+              transform: `translate(${viewport.x}px, ${viewport.y}px) scale(${viewport.zoom})`,
             },
           })
           break
         case "svg":
-          dataUrl = await toSvg(viewport, {
+          dataUrl = await toSvg(viewportElement, {
             backgroundColor: "#ffffff",
             width: 1024,
             height: 768,
             style: {
               width: "1024px",
               height: "768px",
-              transform: `translate(${transform[0]}px, ${transform[1]}px) scale(${transform[2]})`,
+              transform: `translate(${viewport.x}px, ${viewport.y}px) scale(${viewport.zoom})`,
             },
           })
           break

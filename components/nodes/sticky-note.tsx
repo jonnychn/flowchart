@@ -1,7 +1,7 @@
 "use client"
 
 import { memo } from "react"
-import type { NodeProps } from "reactflow"
+import type { NodeProps } from "@xyflow/react"
 import { StickyNote } from "lucide-react"
 import type { NodeData } from "@/lib/types"
 

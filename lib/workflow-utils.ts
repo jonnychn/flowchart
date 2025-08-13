@@ -1,4 +1,4 @@
-import type { Node, XYPosition } from "reactflow"
+import type { Node, XYPosition } from "@xyflow/react"
 import type { NodeData } from "./types"
 
 let nodeIdCounter = 0

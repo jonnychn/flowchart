@@ -1,7 +1,7 @@
 "use client"
 
 import { memo } from "react"
-import { Handle, Position, type NodeProps } from "reactflow"
+import { Handle, Position, type NodeProps } from "@xyflow/react"
 import { FileOutput } from "lucide-react"
 import type { NodeData } from "@/lib/types"
 
